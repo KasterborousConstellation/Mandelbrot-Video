@@ -1,14 +1,17 @@
 #include "mandellib.h"
+static inline int FLAT(int x, int y, int linesize){
+    return y*linesize +x;
+}
+static inline int COAL(int* pixels, int x, int y, int linesize){
+    return pixels[FLAT(x,y,linesize)];
+}
 
 Frame* initFrame(const int width, const int height, M_Theme_Prim* theme){
     Frame* frame =(Frame*) malloc(sizeof(Frame));
     frame->height = height;
     frame->width =width;
     frame->theme = theme;
-    frame->pixels =(int**) malloc(height*sizeof(int*));
-    for(int i = 0; i < height; i++){
-        frame->pixels[i] =(int*) malloc(width*sizeof(int));
-    }
+    frame->pixels =(int*) malloc(height*width*sizeof(int));
     return frame;
 }
 static inline int computeAt(int maxIter, double crp, double cip){
@@ -35,11 +38,11 @@ void createFrame(Frame* frame, const int accuracy, const double x_min, const dou
     int height = frame->height;
     for(int y =0 ; y<height; y++){
         for(int x=0; x<width;x++){
-            double creal = x_min + (double)x/(width-1) *(x_max-x_min);
-            double cim = y_max - (double)y/(height-1)*(y_max-y_min); 
+            double creal = x_min + (double)x/(double)width *(x_max-x_min);
+            double cim = y_max - ((double)y/(double)height) *(y_max-y_min); 
             int iter = computeAt(accuracy,creal,cim);
             int col= frame->theme->fptr(iter,accuracy);
-            frame->pixels[y][x] = col;
+            frame->pixels[FLAT(x,y,width)] = col;
         }
     }
 }
@@ -52,9 +55,9 @@ void writeImage(const char* path, Frame* frame){
     }
     fprintf(fp,"P6\n%d %d\n255\n",frame->width,frame->height);
     for(int y =0; y < frame->height;y++){
-        int* line = frame->pixels[y];
+        
         for(int x=0; x < frame->width;x++){
-            int pixel = line[x];
+            int pixel = frame->pixels[FLAT(x,y,frame->width)];
             fputc((pixel>>16) &255,fp);
             fputc((pixel>>8) &255,fp);
             fputc((pixel&255),fp);
@@ -81,8 +84,8 @@ void directWriteImage(const char* path, int width, int height, int accuracy, dou
                 printf("Work: %lf\n", 100.0*((double)iter_loop/(double)total_iter));
                 t_last =clock();
             }
-            double creal = x_min + (double)x/(width-1) *(x_max-x_min);
-            double cim = y_max - (double)y/(height-1)*(y_max-y_min); 
+            double creal = x_min + (double)x/(width) *(x_max-x_min);
+            double cim = y_max - (double)y/(height)*(y_max-y_min); 
             int iter = computeAt(accuracy,creal,cim);
             int pixel= 0;
             if(iter<accuracy){
@@ -101,9 +104,6 @@ void directWriteImage(const char* path, int width, int height, int accuracy, dou
     printf("Image processing completed\n");
 }
 void freeFrame(Frame* frame){
-    for(int i = 0; i < frame->height;i++){
-        free(frame->pixels[i]);
-    }
     free(frame->theme);
     free(frame->pixels);
     free(frame);

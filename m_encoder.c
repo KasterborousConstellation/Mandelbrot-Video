@@ -82,16 +82,16 @@ void init_encoder(int width, int height, int fps,char* filename, char* path){
     //free(file_path);
 }
 
-void encode(Virtual_Frame v_frame, int* pixels){
+void encode(Virtual_Frame v_frame, int* pixels, int accuracy, M_Theme_Prim* theme){
     KTBS_encoder.rgb_frame->pts =v_frame.frame_id;
-    
     for(int y =0; y< v_frame.height; y++){
         for(int x=0;x<v_frame.width;x++){
             int offset = y*(KTBS_encoder.rgb_frame->linesize[0]) + x*3;
             int data = COAL(pixels,x,y,v_frame.width);
-            KTBS_encoder.rgb_frame->data[0][offset] = ((data)>>16) & 255;
-            KTBS_encoder.rgb_frame->data[0][offset+1] = (data>>8) & 255;
-            KTBS_encoder.rgb_frame->data[0][offset+2] = (data)& 255;
+            int color = theme->fptr(data,accuracy);
+            KTBS_encoder.rgb_frame->data[0][offset] = ((color)>>16) & 255;
+            KTBS_encoder.rgb_frame->data[0][offset+1] = (color>>8) & 255;
+            KTBS_encoder.rgb_frame->data[0][offset+2] = (color)& 255;
         }
     }
     //Convert frame RGB to YUV 

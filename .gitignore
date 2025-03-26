@@ -3,3 +3,5 @@
 /main
 /mandellib.o
 /m_encoder.o
+/fileUtils.o
+/m_compute.o

@@ -1,8 +1,7 @@
-#include "mandellib.h"
 #include "m_encoder.h"
+#include "fileUtils.h"
+#include "m_compute.h"
 #define PARAMS 8
-
-
 void genbar(double f,char** bar){
     char* tmp = *bar;
     tmp[0] = '\0';
@@ -42,36 +41,41 @@ int main(int argc, char** argv){
     const int height =(int) (720.0*scalar_size);
     const int width =(int) ((double)height*16.0/9.);
     const int speed = atoi(argv[6]);
-    float zoom_factor = 0.5;
     const double realpart = -.743643887037151;
     const double impart = -.131825904205330;
+    const int numberOfFrames = fps * seconds;
+    //Init encoder
     init_encoder(width,height,fps,filename,path);
-
+    //Init graphics
+    M_Graphics gphx = initGraphics();
+    //Read openCL code
+    const char* openClKernelSource = read_entire_file("kernel.cl",NULL);
     char* bar = malloc(256*sizeof(char));
-    int nubmerOfFrames = fps * seconds;
-    clock_t t_start = clock();
+    //Calculate Device params
     
+    M_DeviceInfo deviceinfo = getDeviceInfo(gphx);
+    M_DeviceParameters device_params =  calculateDeviceParameters(deviceinfo,width,height,numberOfFrames);
+    //Init memory on the CPU SIDE
+    initBufferGraphics(&gphx,device_params,width,height);
+    //PRINT THREADING INFO
+    printDeviceInfo(deviceinfo,device_params);
+    //Init memory on the GPU SIDE
+    createGPUBuffers(&gphx,device_params,width,height);
+    //Build the kernel
+    createProgram(&gphx,&openClKernelSource);
+    createKernel(&gphx,"calculate_frame");
+    //Set kernel arguments
+    setKernelArguments(gphx,device_params,accuracy);
     //Encode frames
-    Frame* computed_frame = initFrame(width,height,m_theme_get(COLORFUL_GRADIENT));
-    for(int i = 0; i<nubmerOfFrames; i++){
-        const double x_min = realpart-1.0/zoom_factor;
-        const double x_max = realpart + 1.0/zoom_factor;
-        const double y_min = impart-height/(zoom_factor*width);
-        const double y_max = impart + height/(zoom_factor*width);
-        createFrame(computed_frame,accuracy,x_min,x_max,y_min,y_max);
-        zoom_factor *=1.0+ ((double)speed/(double)fps)/10.0;
-        Virtual_Frame v_frame = (Virtual_Frame){width,height,i};
-        encode(v_frame,computed_frame->pixels);
-        genbar((double)(i+1)/(double)nubmerOfFrames,&bar);
-        printf("\r\033[0m");
-        printf("Frame: %d/%d ,%s",i+1,nubmerOfFrames,bar);
-        fflush(stdout);
-    }
-    clock_t t_end = clock();
-    printf("FINAL TIME: %ld\n",t_end - t_start);
-    freeFrame(computed_frame);
-    //Flush encoder and process last frames 
+    M_Theme_Prim* theme = m_theme_get(COLORFUL_GRADIENT);
+    computeFrame(gphx,device_params,height,width,numberOfFrames,speed,fps,accuracy,realpart,impart,theme);
+    free(theme);
+    //Flush encoder and process last frames
     flush_encoder();
     free_encoder();
+    //Release GPU memory
+    freeGraphics(gphx);
+    free(bar);
+    free(openClKernelSource);
     return 0;
 }
